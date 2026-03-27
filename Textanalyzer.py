@@ -1,35 +1,49 @@
 import re
 import tkinter as tk
 from tkinter import filedialog as fd
+
+global text_area
+global full_text
+full_text = ""
+
+def update_button_state(event=None):
+    # This checks the text area and enables/disables the button
+    content = text_area.get("1.0", tk.END)
+    if content and len(content) >= 2:
+        check_button.config(state=tk.NORMAL)
+    else:
+        check_button.config(state=tk.DISABLED)
+
 def import_file():
-    global text_area
-    global full_text
     file_path = fd.askopenfilename(title="Select a file", filetypes=[("Text files", "*.txt"), ("All files", "*.*")])
     with open(file_path, 'r', encoding = "utf-8") as f:
         text = f.read()
         text_area.insert(tk.INSERT, text) 
         full_text = text_area.get("1.0", tk.END)
         print(full_text)
+        update_button_state()
+
 def paste_text():
-    global text_area
-    global full_text
     try:
         text_from_buffer = root.clipboard_get()
         text_area.insert(tk.INSERT, text_from_buffer) 
         full_text = text_area.get("1.0", tk.END)
+        update_button_state()
     except tk.TclError:
         print("Clipboard is empty or doesn't contain text.")
 
 class Textanalyzer():
     def __init__(self, text):
         self.text = text 
+        self.palindrome = ""
+        self.anagram = ()
+        self.statistics = {}
     #separate the text into words
     def clean_text(self):
-        all_words = self.text.strip().split()
+        all_words = self.text.lower().strip().split()
         # all_words = [word for line in self.text for word in line.strip().split()]
         clean_text = [re.sub(r"[\"“',.!-:;]","",t) for t in all_words]
         self.text = clean_text
-        return self.text
     
     def find_longest_palindrome(self):
         s = ""
@@ -37,7 +51,7 @@ class Textanalyzer():
             rev = i[::-1]
             if rev == i and len(i) > len(s):
                 s = i
-        return s
+        self.palindrome = s
     
     #sort all the words to identify anagrams
     def find_longest_anagram(self):
@@ -59,14 +73,13 @@ class Textanalyzer():
             if cur not in sorted_org[1] :
                 sorted_org[0].append(s)
                 sorted_org[1].append(cur)
-        return (anag1,anag2)
+        self.anagram = (anag1,anag2)
     
     def calculate_statistics(self):
         ans = {
-            "word frequency" : {},
+            "word frequency" : [],
             "average word length" : 0,
-            "consonant vowel ratio" : 0,
-            "common_endings" : {}
+            "consonant vowel ratio" : 0
         }
         # calculating word frequency
         freq = {}
@@ -75,8 +88,8 @@ class Textanalyzer():
                 freq[i] = 1
             elif len(i) >= 3:
                 freq[i] += 1
-        top_10_values = sorted(freq.items(), key =  lambda x : x[1], reverse=True)[:5]
-        ans["word frequency"] = top_10_values
+        top_5_values = sorted(freq.items(), key =  lambda x : x[1], reverse=True)[:5]
+        ans["word frequency"] = top_5_values
         # calculating the average word length
         word_num = len(self.text)
         total_char_count = sum(len(i) for i in self.text)
@@ -92,49 +105,54 @@ class Textanalyzer():
                 else :
                     num_consonants += 1
         ans["consonant vowel ratio"] = num_consonants / num_vowels
-        # calculating common endings
-        freq_common_endings = {}
-        for i in self.text:
-            if len(i) <= 3:
-                continue
-            ending = i[-3:] 
-            if ending not in freq_common_endings.keys():
-                freq_common_endings[ending] = 1
-            else :
-                freq_common_endings[ending] += 1
-        top_10_endings = sorted(freq_common_endings.items(), key =  lambda x : x[1], reverse=True)[:5]
-        ans["common_endings"] = top_10_endings
-        return ans
+        self.statistics = ans
 
 
-# with open("Text.txt", "r", encoding="utf-8") as f:
-    
-#     file = f.readlines()
-    
-#     a = Textanalyzer(file)
-    
-#     #cleaning the text
-#     a.clean_text()
-    
-#     #calculating the statistics
-#     print(f"The longest palindrome in the text is: {a.find_longest_palindrome()}")
-#     print(f"The longest anagrams in the text is: {a.find_longest_anagram()}")
-#     print(a.calculate_statistics())
 root = tk.Tk()
 root.title("Star Animation Control Panel")
-# root.geometry("300x200")
 def solve():
+    full_text = text_area.get("1.0", tk.END)
+
     a = Textanalyzer(full_text)
+    canvas_window = tk.Toplevel(root)
+    canvas_window.title("Bar Chart Panel")
+    canvas = tk.Canvas(canvas_window,width=500,height=400,bg="white")
+    canvas.pack()
+    
+    #cleaning the text and calculating everything
+    a.clean_text()
+    a.calculate_statistics()
+    a.find_longest_anagram()
+    a.find_longest_palindrome()
+    
+    data = a.statistics["word frequency"]
+    bar_width = 60
+    bar_spacing = 20
+    max_height = 300
+    scale = max_height / (3 * data[1][1])
+
+    x = 50
+    for i in data:
+        label = i[0]
+        value = i[1]
+        bar_height = value * scale
+        canvas.create_rectangle(x,max_height - bar_height, x + bar_width, max_height, 
+                                fill = "skyblue",outline="black")
+        canvas.create_text(x + bar_width//2, max_height + 20, text = label)
+        canvas.create_text(x + bar_width//2, max_height - bar_height - 10, text=str(value))
+        x += bar_width + bar_spacing
     
     new_window = tk.Toplevel(root)
-    new_window.title("Analysis Panel")
+    new_window.title("Other statistics panel")
     
-    output_window = tk.Text(new_window, width=40, height=10, font=("Arial", 12))
-    output_window.pack(padx=10, pady=10, fill=tk.BOTH)
+
+    text_area2 = tk.Text(new_window, width=40, height=10, font=("Arial", 12))
+    text_area2.pack(padx=10, pady=10)
     
-    a.clean_text()
-    output_window.insert(tk.INSERT)    
-    
+    text_area2.insert(tk.INSERT,f"The longest anagrams are {a.anagram}\n")
+    text_area2.insert(tk.INSERT,f"The longest palindromes are {a.palindrome}\n")
+    text_area2.insert(tk.INSERT,f"The average word length is {round(a.statistics["average word length"],3)}\n")
+    text_area2.insert(tk.INSERT,f"The consonant and vowel ratio is {round(a.statistics["consonant vowel ratio"],3)}\n")
 
 import_button = tk.Button(root, text="Import File", command=import_file)
 import_button.pack(pady=10)
@@ -145,8 +163,10 @@ paste_text_button.pack(pady=10)
 text_area = tk.Text(root, width=40, height=10, font=("Arial", 12))
 text_area.pack(padx=10, pady=10)
 
-check_button = tk.Button(root, text="Text Analysis", command = solve) 
+check_button = tk.Button(root, text="Text Analysis", command = solve, state=tk.DISABLED) 
 check_button.pack(pady=10)
 
-# root.protocol("WM_DELETE_WINDOW", root.destroy())
+text_area.bind("<KeyRelease>", update_button_state)
+text_area.bind("<ButtonRelease-1>", update_button_state)
+
 root.mainloop()
